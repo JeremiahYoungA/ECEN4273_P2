@@ -1,0 +1,15 @@
+pipeline {
+    agent { label 'linux && cpu' }
+
+    stages {
+        stage('Verify Git checkout') {
+            steps {
+                sh '''
+                    whoami
+                    git log -1 --oneline
+                    ls
+                '''
+            }
+        }
+    }
+}
