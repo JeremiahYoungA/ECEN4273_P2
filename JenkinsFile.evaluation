@@ -48,8 +48,6 @@ pipeline {
                 sh '''
                     .venv/bin/python -m pip install --no-cache-dir ncnn pnnx
 
-                    rm -rf models/best_ncnn_model
-
                     .venv/bin/yolo export \
                         model=models/best.pt \
                         format=ncnn \
