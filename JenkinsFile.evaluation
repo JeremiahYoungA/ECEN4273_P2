@@ -53,7 +53,7 @@ pipeline {
         stage('Evaluate on VOC dataset') {
             steps {
                 sh '''
-                    .venv/bin/python evaluate_voc.py \
+                    .venv/bin/python -u evaluate_voc.py \
                         --model models/best.pt \
                         --samples 200 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
