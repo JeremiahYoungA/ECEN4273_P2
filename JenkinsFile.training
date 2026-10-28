@@ -52,7 +52,7 @@ pipeline {
             }
             post {
                 success {
-                    archiveArtifacts artifacts: "runs/ci/build-${env.BUILD_NUMBER}/**",
+                    archiveArtifacts artifacts: "runs/detect/runs/ci/build-${env.BUILD_NUMBER}/**",
                                     fingerprint: true
                 }
             }
