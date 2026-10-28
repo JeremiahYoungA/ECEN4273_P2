@@ -42,11 +42,40 @@ pipeline {
             }
         }
 
+        stage('Export model to NCNN') {
+            steps {
+                sh '''
+                    .venv/bin/python -m pip install --no-cache-dir ncnn pnnx
+
+                    rm -rf models/best_ncnn_model
+
+                    .venv/bin/yolo export \
+                        model=models/best.pt \
+                        format=ncnn \
+                        imgsz=640 \
+                        batch=1 \
+                        device=cpu
+
+                    test -s models/best_ncnn_model/model.ncnn.param
+                    test -s models/best_ncnn_model/model.ncnn.bin
+                '''
+            }
+
+            post {
+                success {
+                    archiveArtifacts(
+                        artifacts: 'models/best_ncnn_model/**',
+                        fingerprint: true
+                    )
+                }
+            }
+        }
+
         stage('Evaluate on VOC dataset') {
             steps {
                 sh '''
                     .venv/bin/python -u evaluate_voc.py \
-                        --model models/best.pt \
+                        --model models/best_ncnn_model.pt \
                         --samples 200 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
                 '''
