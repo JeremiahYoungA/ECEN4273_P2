@@ -23,5 +23,19 @@ pipeline {
                 '''
             }
         }
+
+        stage('Download trained model') {
+            steps {
+                copyArtifacts(
+                    projectName: 'model-training-nightly',
+                    sector: lastSuccessful(),
+                    filter: '**/weights/best.pt',
+                    target: 'models',
+                    flatten: true
+                )
+
+                sh 'test -s models/best.pt'
+            }
+        }
     }
 }
