@@ -1,5 +1,5 @@
 pipeline {
-    agent {label 'laptop-gpu'}
+    agent {label 'gpu'}
 
     stages {
         stage('Check training agent') {
@@ -16,6 +16,22 @@ pipeline {
         stage('Check NVIDIA GPU') {
             steps {
                 sh 'nvidia-smi'
+            }
+        }
+
+        stage('Prepare Python environment') {
+            steps {
+                sh '''
+                    python3 -m venv .venv
+                    .venv/bin/python -m pip install --upgrade pip
+                    .venv/bin/python -m pip install ultralytics
+                '''
+            }
+        }
+
+        stage('Verify PyTorch GPU') {
+            steps {
+                sh '.venv/bin/python verify_gpu.py'
             }
         }
     }
