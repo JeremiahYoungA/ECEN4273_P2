@@ -10,6 +10,10 @@
 
 4. Achieve a mAP@0.5 of 0.85 on an instructor provided test dataset.
 
+## CI/CD
+
+1. Integrate Jenkins with Git for automatic unit testing
+
 ## Team Members
 
 1. Jeremiah Young
