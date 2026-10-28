@@ -35,12 +35,12 @@ pipeline {
             }
         }
 
-        stage('Training smoke test') {
+        stage('Training test') {
             steps {
                 sh '''
                     .venv/bin/yolo detect train \
                         model=yolo11n.pt \
-                        data=coco8.yaml \
+                        data=coco128.yaml \
                         epochs=1 \
                         imgsz=640 \
                         batch=4 \
