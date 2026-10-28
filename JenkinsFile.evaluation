@@ -22,6 +22,7 @@ pipeline {
             steps {
                 // Remove old weights so they cannot mask a failed download.
                 sh 'rm -f models/best.pt'
+                sh 'rm -rf models/best_ncnn_model'
 
                 copyArtifacts(
                     projectName: 'model-training-nightly',
