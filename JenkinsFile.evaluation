@@ -1,0 +1,58 @@
+pipeline {
+    agent {label 'linux && cpu'}
+
+    stages {
+        stage('Prepare Python environment') {
+            steps {
+                sh '''
+                python3 -m venv .venv
+                .venv/bin/python -m pip install ultralytics==8.4.191
+                '''
+            }
+        }
+
+        stage('Download trained model') {
+            steps {
+                // Remove old weights so they cannot mask a failed download.
+                sh 'rm -f models/best.pt'
+
+                copyArtifacts(
+                    projectName: 'model-training-nightly',
+                    selector: lastSuccessful(),
+                    filter: '**/weights/best.pt',
+                    target: 'models',
+                    flatten: true,
+                    fingerprintArtifacts: true
+                )
+
+                sh 'test -s models/best.pt'
+            }
+        }
+
+        stage('Verify model loads on Pi') {
+            steps {
+                sh '.venv/bin/python verify_model.py'
+            }
+        }
+
+        stage('Evaluate on VOC dataset') {
+            steps {
+                sh '''
+                    .venv/bin/python evaluate_voc.py \
+                        --model models/best.pt \
+                        --samples 200 \
+                        --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
+                '''
+            }
+
+            post {
+                success {
+                    archiveArtifacts(
+                        artifacts: "evaluation/build-${env.BUILD_NUMBER}/**",
+                        fingerprint: true
+                    )
+                }
+            }
+        }
+    }
+}
