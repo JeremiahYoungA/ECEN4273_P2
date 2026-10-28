@@ -75,7 +75,7 @@ pipeline {
             steps {
                 sh '''
                     .venv/bin/python -u evaluate_voc.py \
-                        --model models/best_ncnn_model.pt \
+                        --model models/best_ncnn_model \
                         --samples 200 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
                 '''
