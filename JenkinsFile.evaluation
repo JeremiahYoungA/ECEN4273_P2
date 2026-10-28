@@ -51,9 +51,10 @@ pipeline {
                     .venv/bin/yolo export \
                         model=models/best.pt \
                         format=ncnn \
-                        imgsz=640 \
+                        imgsz=320 \
                         batch=1 \
-                        device=cpu
+                        device=cpu \
+                        quantize=16
 
                     test -s models/best_ncnn_model/model.ncnn.param
                     test -s models/best_ncnn_model/model.ncnn.bin
