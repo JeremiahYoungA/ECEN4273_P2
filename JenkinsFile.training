@@ -1,0 +1,22 @@
+pipeline {
+    agent {label 'laptop-gpu'}
+
+    stages {
+        stage('Check training agent') {
+            steps {
+                sh '''
+                    whoami
+                    hostname
+                    uname -m
+                    python3 --version
+                '''
+            }
+        }
+
+        stage('Check NVIDIA GPU') {
+            steps {
+                sh 'nvidia-smi'
+            }
+        }
+    }
+}
