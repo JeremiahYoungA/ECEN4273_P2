@@ -2,11 +2,26 @@ pipeline {
     agent {label 'linux && cpu'}
 
     stages {
+        stage('Clean failed installation') {
+            steps {
+                sh '''
+                    .venv/bin/python -m pip cache purge
+                    rm -rf .venv
+                '''
+            }
+        }
+        
         stage('Prepare Python environment') {
             steps {
                 sh '''
-                python3 -m venv .venv
-                .venv/bin/python -m pip install ultralytics==8.4.191
+                    python3 -m venv .venv
+
+                    .venv/bin/python -m pip install --no-cache-dir \
+                        "torch==2.14.1+cpu" torchvision \
+                        --index-url https://download.pytorch.org/whl/cpu
+
+                    .venv/bin/python -m pip install --no-cache-dir \
+                        ultralytics==8.4.191
                 '''
             }
         }

@@ -19,7 +19,7 @@ pipeline {
                     .venv/bin/python -m pip install ruff
                     .venv/bin/python -m ruff check \
                         --select E9,F63,F7,F82 \
-                        webcam.py verify_gpu.py
+                        webcam.py verify_gpu.py verify_model.py evaluate_voc.py
                 '''
             }
         }
