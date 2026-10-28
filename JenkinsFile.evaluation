@@ -2,14 +2,6 @@ pipeline {
     agent {label 'linux && cpu'}
 
     stages {
-        stage('Clean failed installation') {
-            steps {
-                sh '''
-                    .venv/bin/python -m pip cache purge
-                    rm -rf .venv
-                '''
-            }
-        }
         
         stage('Prepare Python environment') {
             steps {
