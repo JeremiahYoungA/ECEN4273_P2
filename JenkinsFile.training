@@ -34,5 +34,28 @@ pipeline {
                 sh '.venv/bin/python verify_gpu.py'
             }
         }
+
+        stage('Training smoke test') {
+            steps {
+                sh '''
+                    .venv/bin/yolo detect train \
+                        model=yolo11n.pt \
+                        data=coco8.yaml \
+                        epochs=1 \
+                        imgsz=640 \
+                        batch=4 \
+                        device=0 \
+                        workers=2 \
+                        project=runs/ci \
+                        name=build-$BUILD_NUMBER
+                '''
+            }
+            post {
+                success {
+                    archiveArtifacts artifacts: "runs/ci/build-${env.BUILD_NUMBER}/**",
+                                    fingerprint: true
+                }
+            }
+        }
     }
 }
