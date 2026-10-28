@@ -28,7 +28,7 @@ pipeline {
             steps {
                 copyArtifacts(
                     projectName: 'model-training-nightly',
-                    sector: lastSuccessful(),
+                    selector: lastSuccessful(),
                     filter: '**/weights/best.pt',
                     target: 'models',
                     flatten: true
