@@ -37,9 +37,7 @@ pipeline {
 
         stage('Prepare dataset') {
             steps {
-                sh '''
-                    ./venv/bin/python prepare_dataset.py
-                '''
+                sh '.venv/bin/python prepare_dataset.py'
             }
         }
 
