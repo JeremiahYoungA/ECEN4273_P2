@@ -24,7 +24,11 @@ def download(url, destination):
 def prepare_coco():
     """Select 300 images per class for training, verification, and testing"""
     archive = DATASETS / "cache/annotations_trainval2017.zip"
-    download("https://images.cocodataset.org/annotations/annotations_trainval2017.zip", archive)
+    download(
+        "https://s3.amazonaws.com/images.cocodataset.org/"
+        "annotations/annotations_trainval2017.zip",
+        archive,
+    )
     with ZipFile(archive) as zipped:
         annotations = json.loads(zipped.read("annotations/instances_train2017.json"))
 
@@ -77,7 +81,10 @@ def prepare_coco():
         for image_id in image_ids:
             image = images[image_id]
             filename = image["file_name"]
-            download(f"https://images.cocodataset.org/train2017/{filename}", image_output / filename)
+            download(
+                f"https://s3.amazonaws.com/images.cocodataset.org/train2017/{filename}",
+                image_output / filename,
+            )
             lines = []
             for box in boxes[image_id]:
                 x, y, w, h = box["bbox"]  # COCO: top-left x/y and width/height in pixels.
