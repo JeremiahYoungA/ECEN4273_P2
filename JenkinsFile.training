@@ -52,7 +52,7 @@ pipeline {
                         batch=4 \
                         device=0 \
                         workers=2 \
-                        project="$WORKSPACE/runs/ci" \ \
+                        project="$WORKSPACE/runs/ci" \
                         name=build-$BUILD_NUMBER
                 '''
             }
