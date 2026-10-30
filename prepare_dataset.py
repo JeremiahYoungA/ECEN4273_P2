@@ -9,7 +9,7 @@ import yaml
 
 DATASETS = Path(__file__).resolve().parent / "datasets"
 NAMES = ["person", "cat", "dog", "dalek", "lightsaber"]
-IMAGES_PER_CLASS = 300
+IMAGES_PER_CLASS = 500
 
 
 def download(url, destination):
@@ -22,7 +22,7 @@ def download(url, destination):
 
 
 def prepare_coco():
-    """Select 300 images per class for training, verification, and testing"""
+    """Select images per class for training, verification, and testing"""
     archive = DATASETS / "cache/annotations_trainval2017.zip"
     download(
         "https://s3.amazonaws.com/images.cocodataset.org/"
