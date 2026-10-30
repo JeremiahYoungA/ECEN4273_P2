@@ -109,16 +109,27 @@ def prepare_coco():
 
 def main():
     prepare_coco()
+
     configuration = {
         "path": str(DATASETS),
-        "train": ["coco/train.txt", "custom/images/train"],
-        "val": ["coco/val.txt", "custom/images/val"],
+        "train": ["coco/train.txt"],
+        "val": ["coco/val.txt"],
         "test": ["coco/test.txt"],
         "names": dict(enumerate(NAMES)),
     }
-    if (DATASETS / "custom/images/test").is_dir():
-        configuration["test"].append("custom/images/test")
-    (DATASETS / "project.yaml").write_text(yaml.safe_dump(configuration, sort_keys=False))
+
+    for split in ("train", "val", "test"):
+        folder = DATASETS / "custom" / "images" / split
+
+        if folder.is_dir() and any(folder.iterdir()):
+            configuration[split].append(f"custom/images/{split}")
+        else:
+            print(f"No custom {split} images; using COCO only.")
+
+    (DATASETS / "project.yaml").write_text(
+        yaml.safe_dump(configuration, sort_keys=False)
+    )
+
     print("Ready: datasets/project.yaml")
 
 
