@@ -24,7 +24,7 @@ pipeline {
                 sh '''
                     python3 -m venv .venv
                     .venv/bin/python -m pip install --upgrade pip
-                    .venv/bin/python -m pip install ultralytics
+                    .venv/bin/python -m pip install ultralytics==8.4.191
                 '''
             }
         }
@@ -45,7 +45,7 @@ pipeline {
             steps {
                 sh '''
                     .venv/bin/yolo detect train \
-                        model=yolo11n.pt \
+                        model=yolo26n.pt \
                         data=datasets/project.yaml \
                         epochs=30 \
                         imgsz=640 \

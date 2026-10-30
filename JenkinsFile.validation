@@ -22,7 +22,7 @@ pipeline {
             steps {
                 // Remove old weights so they cannot mask a failed download.
                 sh 'rm -f models/best.pt'
-                sh 'rm -rf models/best_ncnn_model'
+                sh 'rm -rf models/best.onnx'
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
                 copyArtifacts(
@@ -49,28 +49,29 @@ pipeline {
             }
         }
 
-        stage('Export model to NCNN') {
+        stage('Export model to ONNX') {
             steps {
                 sh '''
-                    .venv/bin/python -m pip install --no-cache-dir ncnn pnnx
+                    .venv/bin/python -m pip install --no-cache-dir \
+                        onnx onnxruntime onnxslim
 
                     .venv/bin/yolo export \
                         model=models/best.pt \
-                        format=ncnn \
+                        format=onnx \
                         imgsz=640 \
                         batch=1 \
                         device=cpu \
-                        quantize=16
+                        dynamic=False \
+                        simplify=True
 
-                    test -s models/best_ncnn_model/model.ncnn.param
-                    test -s models/best_ncnn_model/model.ncnn.bin
+                    test -s models/best.onnx
                 '''
             }
 
             post {
                 success {
                     archiveArtifacts(
-                        artifacts: 'models/best_ncnn_model/**',
+                        artifacts: 'models/best.onnx',
                         fingerprint: true
                     )
                 }
@@ -81,7 +82,7 @@ pipeline {
             steps {
                 sh '''
                     .venv/bin/python -u validate.py \
-                        --model models/best_ncnn_model \
+                        --model models/best.onnx \
                         --split val \
                         --samples 100 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
