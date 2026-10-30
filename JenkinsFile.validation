@@ -23,17 +23,23 @@ pipeline {
                 // Remove old weights so they cannot mask a failed download.
                 sh 'rm -f models/best.pt'
                 sh 'rm -rf models/best_ncnn_model'
+                sh 'rm -f models/coco-evaluation.tar.gz'
 
                 copyArtifacts(
                     projectName: 'model-training-nightly',
                     selector: lastSuccessful(),
-                    filter: '**/weights/best.pt',
+                    filter: '**/weights/best.pt,**/coco-evaluation.tar.gz',
                     target: 'models',
                     flatten: true,
                     fingerprintArtifacts: true
                 )
 
-                sh 'test -s models/best.pt'
+                sh '''
+                    test -s models/best.pt
+                    test -s models/coco-evaluation.tar.gz
+                    mkdir -p datasets
+                    tar -xzf models/coco-evaluation.tar.gz -C datasets
+                '''
             }
         }
 
@@ -71,11 +77,12 @@ pipeline {
             }
         }
 
-        stage('Evaluate on VOC dataset') {
+        stage('Validate') {
             steps {
                 sh '''
-                    .venv/bin/python -u evaluate_voc.py \
+                    .venv/bin/python -u validate.py \
                         --model models/best_ncnn_model \
+                        --split train \
                         --samples 200 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
                 '''
