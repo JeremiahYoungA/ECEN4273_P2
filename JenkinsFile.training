@@ -52,14 +52,18 @@ pipeline {
                         batch=4 \
                         device=0 \
                         workers=2 \
-                        project=runs/ci \
+                        project="$WORKSPACE/runs/ci" \ \
                         name=build-$BUILD_NUMBER
                 '''
             }
             post {
                 success {
-                    archiveArtifacts artifacts: "runs/detect/runs/ci/build-${env.BUILD_NUMBER}/**",
-                                    fingerprint: true
+                    sh 'test -s "runs/ci/build-$BUILD_NUMBER/weights/best.pt"'
+
+                    archiveArtifacts(
+                        artifacts: "runs/ci/build-${env.BUILD_NUMBER}/**",
+                        fingerprint: true
+                    )
                 }
             }
         }
