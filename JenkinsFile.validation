@@ -57,7 +57,7 @@ pipeline {
                     .venv/bin/yolo export \
                         model=models/best.pt \
                         format=ncnn \
-                        imgsz=320 \
+                        imgsz=640 \
                         batch=1 \
                         device=cpu \
                         quantize=16

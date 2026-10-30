@@ -97,7 +97,7 @@ def main():
         device="cpu",
         batch=1,
         workers=0,
-        imgsz=320,
+        imgsz=640,
         project=str(output.parent),
         name=output.name,
         exist_ok=True,
