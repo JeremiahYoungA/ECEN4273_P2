@@ -60,6 +60,11 @@ pipeline {
                 success {
                     sh 'test -s "runs/ci/build-$BUILD_NUMBER/weights/best.pt"'
 
+                    sh '''
+                        tar -czf "runs/ci/build-$BUILD_NUMBER/coco-evaluation.tar.gz" \
+                            -C datasets coco
+                    '''
+
                     archiveArtifacts(
                         artifacts: "runs/ci/build-${env.BUILD_NUMBER}/**",
                         fingerprint: true
