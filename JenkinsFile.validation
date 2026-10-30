@@ -82,7 +82,7 @@ pipeline {
                 sh '''
                     .venv/bin/python -u validate.py \
                         --model models/best_ncnn_model \
-                        --split train \
+                        --split val \
                         --samples 200 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
                 '''
