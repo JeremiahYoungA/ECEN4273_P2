@@ -35,12 +35,20 @@ pipeline {
             }
         }
 
+        stage('Prepare dataset') {
+            steps {
+                sh '''
+                    ./venv/bin/python prepare_dataset.py
+                '''
+            }
+        }
+
         stage('Training test') {
             steps {
                 sh '''
                     .venv/bin/yolo detect train \
                         model=yolo11n.pt \
-                        data=coco128.yaml \
+                        data=datasets/project.yaml \
                         epochs=1 \
                         imgsz=640 \
                         batch=4 \

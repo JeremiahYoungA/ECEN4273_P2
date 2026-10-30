@@ -1,0 +1,7 @@
+train:
+  - coco/images/train
+  - custom/images/train
+
+val:
+  - coco/images/val
+  - custom/images/val
