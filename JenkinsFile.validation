@@ -19,7 +19,7 @@ pipeline {
         string(
             name: 'MODEL_BUILD',
             defaultValue: 'lastSuccessfulBuild',
-            description: 'Training build number, or lastSuccessfulBuild'
+            description: 'Training build number, or lastSuccessfulBuild',
             trim: true
         )
     }
