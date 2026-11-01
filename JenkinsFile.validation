@@ -1,7 +1,41 @@
 pipeline {
     agent {label 'linux && cpu'}
 
+    parameters {
+        string(
+            name: 'GIT_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch containing the validation scripts',
+            trim: true
+        )
+
+        string(
+            name: 'MODEL_JOB',
+            defaultValue: 'model-training-test',
+            description: 'Jenkins job supplying the model and dataset artifacts',
+            trim: true
+        )
+    }
+
+    options {
+        skipDefaultCheckout()
+    }
+
+
+
     stages {
+
+        stage('Checkout selected branch') {
+            steps{
+                git(
+                    branch: params.GIT_BRANCH,
+                    url: 'https://github.com/JeremiahYoungA/ECEN4273_P2.git'
+                )
+
+                echo "Validation code branch: ${params.GIT_BRANCH}"
+                echo "Model artifact job: ${params.MODEL_JOB}"
+            }
+        }
         
         stage('Prepare Python environment') {
             steps {
@@ -26,7 +60,7 @@ pipeline {
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
                 copyArtifacts(
-                    projectName: 'model-training-test',
+                    projectName: params.MODEL_JOB,
                     selector: lastSuccessful(),
                     filter: '**/weights/best.pt,**/coco-evaluation.tar.gz',
                     target: 'models',

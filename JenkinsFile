@@ -38,4 +38,23 @@ pipeline {
             }
         }
     }
+
+    post {
+        success {
+            build(
+                job: '/model-validation',
+                parameters: [
+                    string(
+                        name: 'GIT_BRANCH',
+                        value: env.GIT_BRANCH.replaceFirst('^origin/', '')
+                    ),
+                    string(
+                        name: 'MODEL_JOB',
+                        value: 'model-training-test'
+                    )
+                ],
+                wait: false
+            )
+        }
+    }
 }
