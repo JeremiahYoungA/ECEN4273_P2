@@ -42,7 +42,7 @@ pipeline {
     post {
         success {
             build(
-                job: '/model-validation',
+                job: '/model-validation-ci',
                 parameters: [
                     string(
                         name: 'GIT_BRANCH',
