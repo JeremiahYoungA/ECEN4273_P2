@@ -16,6 +16,8 @@
 
 2. Create tests for code validation, model training, and model validation
 
+3. Allow job and build selection for easy testing
+
 ## Team Members
 
 1. Jeremiah Young
