@@ -26,7 +26,7 @@ pipeline {
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
                 copyArtifacts(
-                    projectName: 'model-training-nightly',
+                    projectName: 'model-training-test',
                     selector: lastSuccessful(),
                     filter: '**/weights/best.pt,**/coco-evaluation.tar.gz',
                     target: 'models',
