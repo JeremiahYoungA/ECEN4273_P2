@@ -72,7 +72,7 @@ pipeline {
                     filter: '**/weights/best.pt,**/coco-evaluation.tar.gz',
                     target: 'models',
                     flatten: true,
-                    fingerprintArtifacts: true
+                    fingerprintArtifacts: true,
                     resultVariableSuffix: 'TRAINING'
                 )
 
