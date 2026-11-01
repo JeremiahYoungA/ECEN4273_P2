@@ -15,6 +15,13 @@ pipeline {
             description: 'Jenkins job supplying the model and dataset artifacts',
             trim: true
         )
+
+        string(
+            name: 'MODEL_BUILD',
+            defaultValue: 'lastSuccessfulBuild',
+            description: 'Training build number, or lastSuccessfulBuild'
+            trim: true
+        )
     }
 
     options {
@@ -61,11 +68,12 @@ pipeline {
 
                 copyArtifacts(
                     projectName: params.MODEL_JOB,
-                    selector: lastSuccessful(),
+                    selector: specific(params.MODEL_BUILD),
                     filter: '**/weights/best.pt,**/coco-evaluation.tar.gz',
                     target: 'models',
                     flatten: true,
                     fingerprintArtifacts: true
+                    resultVariableSuffix: 'TRAINING'
                 )
 
                 sh '''
