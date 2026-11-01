@@ -27,7 +27,7 @@ pipeline {
         stage('Download trained model') {
             steps {
                 copyArtifacts(
-                    projectName: 'model-training-nightly',
+                    projectName: 'model-training-test',
                     selector: lastSuccessful(),
                     filter: '**/weights/best.pt',
                     target: 'models',
