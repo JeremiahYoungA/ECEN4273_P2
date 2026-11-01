@@ -14,6 +14,8 @@
 
 1. Integrate Jenkins with Git for automatic unit testing
 
+2. Create tests for code validation, model training, and model validation
+
 ## Team Members
 
 1. Jeremiah Young
