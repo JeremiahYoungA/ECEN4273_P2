@@ -1,7 +1,33 @@
 pipeline {
     agent {label 'gpu'}
 
+    options {
+        skipDefaultCheckout()
+    }
+
+    parameters {
+        string(
+            name: 'TRAIN_BRANCH',
+            defaultValue: 'main',
+            description: 'GIT branch containing training code'
+        )
+    }    
+    
+    environment {
+        VENV = '/home/jenkins-agent/venvs/model-training'
+    }
+
     stages {
+        stage('Checkout Training Code') {
+            steps{
+                deleteDir()
+                git branch: params.TRAIN_BRANCH,
+                    url: 'https://github.com/JeremiahYoungA/ECEN4273_P2.git'
+
+                sh 'git log -1 --format="%h %s"'
+            }
+        }
+
         stage('Check training agent') {
             steps {
                 sh '''
@@ -22,42 +48,38 @@ pipeline {
         stage('Prepare Python environment') {
             steps {
                 sh '''
-                    python3 -m venv .venv
-                    .venv/bin/python -m pip install --upgrade pip
-                    .venv/bin/python -m pip install ultralytics==8.4.191
+                    set -eu
+
+                    if [ ! -x $VENV/bin/python ]; then
+                        echo "Creating Python environment"
+                        python3 -m venv "$VENV"
+                    fi
+
+                    $VENV/bin/python -m pip install --upgrade pip
+                    $VENV/bin/python -m pip install ultralytics==8.4.191
+                    $VENV/bin/python -m pip check
+
                 '''
             }
         }
 
         stage('Verify PyTorch GPU') {
             steps {
-                sh '.venv/bin/python verify_gpu.py'
+                sh '$VENV/bin/python verify_gpu.py'
             }
         }
 
         stage('Prepare dataset') {
             steps {
-                sh '.venv/bin/python prepare_dataset.py'
+                sh '$VENV/bin/python prepare_dataset.py'
             }
         }
 
         stage('Training test') {
             steps {
-                sh '''
-                    .venv/bin/yolo detect train \
-                        model=yolo26n.pt \
-                        data=datasets/project.yaml \
-                        epochs=1 \
-                        imgsz=640 \
-                        batch=16 \
-                        device=0 \
-                        workers=4 \
-                        cache=ram \
-                        amp=True \
-                        project="$WORKSPACE/runs/ci" \
-                        name=build-$BUILD_NUMBER
-                '''
+                sh '$VENV/bin/python -u train.py'
             }
+            
             post {
                 success {
                     sh 'test -s "runs/ci/build-$BUILD_NUMBER/weights/best.pt"'
