@@ -15,6 +15,7 @@ pipeline {
     
     environment {
         VENV = '/home/jenkins-agent/venvs/model-training'
+        DATASET_CACHE = '/home/jenkins-agent/dataset_cache/project2'
     }
 
     stages {
@@ -66,6 +67,26 @@ pipeline {
         stage('Verify PyTorch GPU') {
             steps {
                 sh '$VENV/bin/python verify_gpu.py'
+            }
+        }
+
+        stage('Connect dataset cache') {
+            steps {
+                sh '''
+                    set -eu
+                    mkdir -p "$DATASET_CACHE/coco" "$DATASET_CACHE/cache"
+                    mkdir -p datasets
+
+                    # Stop rather than replace anything already present.
+                    if [ -e datasets/coco ] || [ -L datasets/coco ] || \
+                    [ -e datasets/cache ] || [ -L datasets/cache ]; then
+                        echo "datasets/coco or datasets/cache already exists; inspect before linking."
+                        exit 1
+                    fi
+
+                    ln -s "$DATASET_CACHE/coco" datasets/coco
+                    ln -s "$DATASET_CACHE/cache" datasets/cache
+                '''
             }
         }
 
