@@ -4,12 +4,15 @@ from collections import defaultdict
 from pathlib import Path
 from urllib.request import urlretrieve
 from zipfile import ZipFile
+from itertools import repeat
+from concurrent.futures import ThreadPoolExecutor
 
 import yaml
 
 DATASETS = Path(__file__).resolve().parent / "datasets"
 NAMES = ["person", "cat", "dog", "dalek", "lightsaber"]
 IMAGES_PER_CLASS = 500
+DOWNLOAD_WORKERS = 16
 
 
 def download(url, destination):
@@ -19,6 +22,14 @@ def download(url, destination):
         temporary = destination.with_suffix(destination.suffix + ".part")
         urlretrieve(url, temporary)
         temporary.replace(destination)
+
+def download_img(filename, image_output):
+    """Download one image"""
+    url = (
+        "https://s3.amazonaws.com/images.cocodataset.org/"
+        f"train2017/{filename}"
+    )
+    download(url, image_output / filename)
 
 
 def prepare_coco():
@@ -78,13 +89,25 @@ def prepare_coco():
         image_output.mkdir(parents=True, exist_ok=True)
         label_output.mkdir(parents=True, exist_ok=True)
 
+        filenames = [images[image_id]["file_name"] for image_id in image_ids]
+
+        print(f"Checking/downloading {len(filenames)} {split} images...")
+
+        with ThreadPoolExecutor(max_workers=DOWNLOAD_WORKERS) as executor:
+            results = executor.map(
+                download_img,
+                filenames,
+                repeat(image_output),
+            )
+
+            for completed, _ in enumerate(results, start=1):
+                if completed % 100 == 0 or completed == len(filenames):
+                    print(f"  {split}: {completed}/{len(filenames)} ready")
+
         for image_id in image_ids:
             image = images[image_id]
             filename = image["file_name"]
-            download(
-                f"https://s3.amazonaws.com/images.cocodataset.org/train2017/{filename}",
-                image_output / filename,
-            )
+
             lines = []
             for box in boxes[image_id]:
                 x, y, w, h = box["bbox"]  # COCO: top-left x/y and width/height in pixels.
