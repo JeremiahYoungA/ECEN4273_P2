@@ -17,6 +17,6 @@ model.train(
     cache="ram",
     amp=True,
     project=str(workspace / "runs" / "ci"),
-    name=f"build-yolo26n-embedded-{build_number}",
+    name=f"build-{build_number}",
     exist_ok=True
 )
