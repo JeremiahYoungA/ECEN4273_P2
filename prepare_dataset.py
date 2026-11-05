@@ -11,6 +11,7 @@ import yaml
 
 DATASETS = Path(__file__).resolve().parent / "datasets"
 NAMES = ["person", "cat", "dog", "dalek", "lightsaber"]
+MIN_BOX_AREA_FRACTION = 0.25
 IMAGES_PER_CLASS = 500
 DOWNLOAD_WORKERS = 16
 
@@ -58,12 +59,40 @@ def prepare_coco():
             if annotation.get("iscrowd", 0):
                 crowd_images.add(annotation["image_id"])
 
-    # Exclude target crowd regions, which don't have ordinary individual boxes.
+    # Look up the dimensions of each COCO image.
+    images = {image["id"]: image for image in annotations["images"]}
+
+    # Only select images with a target object's bounding box covering
+    # at least 25% of the image area.
     candidates = defaultdict(set)
+
     for image_id, image_boxes in boxes.items():
-        if image_id not in crowd_images:
-            for box in image_boxes:
-                candidates[class_map[box["category_id"]]].add(image_id)
+        if image_id in crowd_images:
+            continue
+
+        image = images[image_id]
+        image_width = image["width"]
+        image_height = image["height"]
+        image_area = image_width * image_height
+
+        for box in image_boxes:
+            x, y, w, h = box["bbox"]
+
+            # Clip the box to the image, matching label generation.
+            left = max(0, x)
+            top = max(0, y)
+            right = min(image_width, x + w)
+            bottom = min(image_height, y + h)
+
+            if right <= left or bottom <= top:
+                continue
+
+            box_area = (right - left) * (bottom - top)
+            area_fraction = box_area / image_area
+
+            if area_fraction >= MIN_BOX_AREA_FRACTION:
+                class_id = class_map[box["category_id"]]
+                candidates[class_id].add(image_id)
 
     rng = random.Random(76)
     selected = set()
@@ -82,7 +111,6 @@ def prepare_coco():
         "test": selected[val_end:],
     }
 
-    images = {image["id"]: image for image in annotations["images"]}
     for split, image_ids in splits.items():
         image_output = DATASETS / "coco/images" / split
         label_output = DATASETS / "coco/labels" / split
