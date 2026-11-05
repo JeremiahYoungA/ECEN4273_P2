@@ -64,6 +64,7 @@ pipeline {
                 // Remove old weights so they cannot mask a failed download.
                 sh 'rm -f models/best.pt'
                 sh 'rm -rf models/best.onnx'
+                sh 'rm -rf datasets/coco'
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
                 copyArtifacts(
