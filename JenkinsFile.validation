@@ -1,5 +1,5 @@
 pipeline {
-    agent {label 'linux && cpu'}
+    agent { label 'linux && cpu' }
 
     parameters {
         string(
@@ -28,12 +28,9 @@ pipeline {
         skipDefaultCheckout()
     }
 
-
-
     stages {
-
         stage('Checkout selected branch') {
-            steps{
+            steps {
                 git(
                     branch: params.GIT_BRANCH,
                     url: 'https://github.com/JeremiahYoungA/ECEN4273_P2.git'
@@ -43,7 +40,7 @@ pipeline {
                 echo "Model artifact job: ${params.MODEL_JOB}"
             }
         }
-        
+
         stage('Prepare Python environment') {
             steps {
                 sh '''
@@ -61,9 +58,10 @@ pipeline {
 
         stage('Download trained model') {
             steps {
-                // Remove old weights so they cannot mask a failed download.
+                // Remove old artifacts so they cannot mask a failed download
+                // or export.
                 sh 'rm -f models/best.pt'
-                sh 'rm -rf models/best.ncnn'
+                sh 'rm -rf models/best_ncnn_model'
                 sh 'rm -rf datasets/coco'
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
@@ -100,21 +98,19 @@ pipeline {
                     .venv/bin/yolo export \
                         model=models/best.pt \
                         format=ncnn \
-                        imgsz=640 \
+                        imgsz=320 \
                         batch=1 \
                         device=cpu \
-                        dynamic=False \
-                        quantize=16 \
-                        simplify=True
+                        quantize=16
 
-                    test -s models/best.ncnn
+                    test -d models/best_ncnn_model
                 '''
             }
 
             post {
                 success {
                     archiveArtifacts(
-                        artifacts: 'models/best.ncnn',
+                        artifacts: 'models/best_ncnn_model/**',
                         fingerprint: true
                     )
                 }
@@ -125,7 +121,7 @@ pipeline {
             steps {
                 sh '''
                     .venv/bin/python -u validate.py \
-                        --model models/best.ncnn \
+                        --model models/best_ncnn_model \
                         --split val \
                         --samples 100 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
