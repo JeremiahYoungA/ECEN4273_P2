@@ -6,77 +6,308 @@ pipeline {
     }
 
     parameters {
-        string(name: 'GIT_BRANCH', defaultValue: 'main', description: 'Branch containing the benchmark script', trim: true)
-        string(name: 'MODEL_JOB', defaultValue: 'model-training-test', description: 'Training job with exported model and dataset', trim: true)
-        string(name: 'MODEL_BUILD', defaultValue: 'lastSuccessfulBuild', description: 'Training build number or lastSuccessfulBuild', trim: true)
-        string(name: 'SAMPLES', defaultValue: '100', description: 'Number of validation images to benchmark', trim: true)
-        string(name: 'VULKAN_DEVICE_INDEX', defaultValue: '0', description: 'NCNN Vulkan device index; check the device list in the log', trim: true)
+        string(
+            name: 'MODEL_JOB',
+            defaultValue: 'model-training-test',
+            description: 'Jenkins job containing the ONNX model and dataset',
+            trim: true
+        )
+
+        string(
+            name: 'MODEL_BUILD',
+            defaultValue: 'lastSuccessfulBuild',
+            description: 'Training build number, or lastSuccessfulBuild',
+            trim: true
+        )
+
+        string(
+            name: 'SAMPLES',
+            defaultValue: '100',
+            description: 'Number of validation images to benchmark',
+            trim: true
+        )
     }
 
     environment {
         VENV = "${WORKSPACE}/.venv"
+
+        // Ask OpenCV to select an OpenCL GPU.
+        OPENCV_OPENCL_DEVICE = ':GPU:'
     }
 
     stages {
-        stage('Checkout') {
-            steps {
-                git branch: params.GIT_BRANCH, url: 'https://github.com/JeremiahYoungA/ECEN4273_P2.git'
-                sh 'git log -1 --format="%h %s"'
-            }
-        }
-
-        stage('Prepare lightweight environment') {
+        stage('Prepare OpenCV environment') {
             steps {
                 sh '''
                     set -eu
+
                     python3 -m venv "$VENV"
-                    "$VENV/bin/python" -m pip install --no-cache-dir --only-binary=:all: \
-                        ncnn numpy pillow
+
+                    "$VENV/bin/python" -m pip install \
+                        --no-cache-dir \
+                        --only-binary=:all: \
+                        numpy pillow opencv-python-headless
+
                     "$VENV/bin/python" -m pip check
-                    "$VENV/bin/python" -c 'import ncnn, numpy, PIL; print("NCNN:", ncnn.__file__); print("NumPy:", numpy.__version__); print("Pillow:", PIL.__version__)'
+
+                    "$VENV/bin/python" -c \
+                        'import cv2, numpy, PIL; print("OpenCV:", cv2.__version__); print("NumPy:", numpy.__version__); print("Pillow:", PIL.__version__)'
+
+                    echo "Available disk space:"
+                    df -h "$WORKSPACE"
                 '''
             }
         }
 
-        stage('Download exported model and dataset') {
+        stage('Download ONNX model and dataset') {
             steps {
-                script { env.BENCH_DIR = "uno-q-benchmark/build-${env.BUILD_NUMBER}" }
+                script {
+                    env.BENCH_DIR = "uno-q-opencl/build-${env.BUILD_NUMBER}"
+                }
+
                 copyArtifacts(
                     projectName: params.MODEL_JOB,
                     selector: specific(params.MODEL_BUILD),
-                    filter: '**/weights/best_ncnn_model.tar.gz,**/coco-evaluation.tar.gz',
+                    filter: '**/weights/best.onnx,**/coco-evaluation.tar.gz',
                     target: "${env.BENCH_DIR}/artifacts",
                     flatten: true,
                     fingerprintArtifacts: true,
                     resultVariableSuffix: 'TRAINING'
                 )
+
                 sh '''
                     set -eu
-                    test -s "$BENCH_DIR/artifacts/best_ncnn_model.tar.gz"
-                    test -s "$BENCH_DIR/artifacts/coco-evaluation.tar.gz"
-                    mkdir -p "$BENCH_DIR/model" "$BENCH_DIR/datasets"
-                    tar -xzf "$BENCH_DIR/artifacts/best_ncnn_model.tar.gz" -C "$BENCH_DIR/model"
-                    tar -xzf "$BENCH_DIR/artifacts/coco-evaluation.tar.gz" -C "$BENCH_DIR/datasets"
-                    test -d "$BENCH_DIR/model/best_ncnn_model"
+
+                    if [ ! -s "$BENCH_DIR/artifacts/best.onnx" ]; then
+                        echo "ERROR: best.onnx was not found in the selected training build."
+                        echo "Export and archive it on the laptop before running this job."
+                        exit 1
+                    fi
+
+                    if [ ! -s "$BENCH_DIR/artifacts/coco-evaluation.tar.gz" ]; then
+                        echo "ERROR: coco-evaluation.tar.gz was not found."
+                        exit 1
+                    fi
+
+                    mkdir -p "$BENCH_DIR/datasets"
+
+                    tar -xzf "$BENCH_DIR/artifacts/coco-evaluation.tar.gz" \
+                        -C "$BENCH_DIR/datasets"
+
                     test -d "$BENCH_DIR/datasets/coco/images/val"
-                    # Do not retain both compressed and extracted copies on the Uno Q.
-                    rm -f "$BENCH_DIR/artifacts/best_ncnn_model.tar.gz" \
-                        "$BENCH_DIR/artifacts/coco-evaluation.tar.gz"
+
+                    # The extracted dataset is now available, so remove
+                    # the duplicate compressed copy to save Uno Q storage.
+                    rm -f "$BENCH_DIR/artifacts/coco-evaluation.tar.gz"
+
+                    echo "Model and validation dataset are ready."
                 '''
             }
         }
 
-        stage('Benchmark Adreno GPU') {
+        stage('Benchmark ONNX with OpenCL') {
             steps {
                 sh '''#!/usr/bin/env bash
-                    set -euo pipefail
-                    PYTHONUNBUFFERED=1 "$VENV/bin/python" -u benchmark_ncnn.py \
-                        --model "$BENCH_DIR/model/best_ncnn_model" \
-                        --images "$BENCH_DIR/datasets/coco/images/val" \
-                        --samples "$SAMPLES" --device vulkan \
-                        --device-index "$VULKAN_DEVICE_INDEX" \
-                        --output "$BENCH_DIR/results" \
-                        2>&1 | tee "$BENCH_DIR/gpu-benchmark.log"
+set -euo pipefail
+
+mkdir -p "$BENCH_DIR/results"
+
+PYTHONUNBUFFERED=1 "$VENV/bin/python" -u - <<'PY' \
+    2>&1 | tee "$BENCH_DIR/results/opencl-benchmark.log"
+import json
+import os
+import random
+import statistics
+import time
+from pathlib import Path
+
+import cv2
+import numpy as np
+from PIL import Image, ImageOps
+
+bench_dir = Path(os.environ["BENCH_DIR"])
+model_path = bench_dir / "artifacts" / "best.onnx"
+images_dir = bench_dir / "datasets" / "coco" / "images" / "val"
+output_dir = bench_dir / "results"
+
+samples = int(os.environ["SAMPLES"])
+image_size = 320
+
+if samples < 1:
+    raise ValueError("SAMPLES must be at least 1")
+
+images = sorted(
+    path
+    for path in images_dir.iterdir()
+    if path.is_file()
+    and path.suffix.lower() in {".jpg", ".jpeg", ".png", ".bmp", ".webp"}
+)
+
+if samples > len(images):
+    raise ValueError(
+        f"Requested {samples} images, but only {len(images)} were found"
+    )
+
+# Match the fixed seed used by the earlier NCNN benchmark.
+images = sorted(random.Random(42).sample(images, samples))
+
+print("Model:", model_path)
+print("Dataset:", images_dir)
+print("Images:", len(images))
+print("Image size:", image_size)
+print("OpenCV version:", cv2.__version__)
+
+cv2.ocl.setUseOpenCL(True)
+
+print("OpenCL available:", cv2.ocl.haveOpenCL())
+print("OpenCL enabled:", cv2.ocl.useOpenCL())
+
+if not cv2.ocl.useOpenCL():
+    raise RuntimeError("OpenCV could not enable OpenCL")
+
+device = cv2.ocl.Device_getDefault()
+device_name = device.name()
+
+print("OpenCL device:", device_name)
+print("OpenCL device version:", device.version())
+
+targets = cv2.dnn.getAvailableTargets(cv2.dnn.DNN_BACKEND_OPENCV)
+
+print("Available DNN target IDs:", list(targets))
+print("Requested OpenCL target ID:", cv2.dnn.DNN_TARGET_OPENCL)
+
+if cv2.dnn.DNN_TARGET_OPENCL not in targets:
+    raise RuntimeError("OpenCV DNN does not report an OpenCL target")
+
+print("Loading ONNX model...")
+start = time.perf_counter()
+
+net = cv2.dnn.readNetFromONNX(str(model_path))
+net.setPreferableBackend(cv2.dnn.DNN_BACKEND_OPENCV)
+net.setPreferableTarget(cv2.dnn.DNN_TARGET_OPENCL)
+
+load_seconds = time.perf_counter() - start
+output_names = net.getUnconnectedOutLayersNames()
+
+print(f"Model loaded in {load_seconds:.2f} seconds")
+print("Output names:", output_names)
+
+def prepare_image(path):
+    # Use the same letterbox approach as the prior NCNN benchmark.
+    with Image.open(path) as image:
+        image = ImageOps.exif_transpose(image).convert("RGB")
+
+        scale = min(
+            image_size / image.width,
+            image_size / image.height,
+        )
+
+        width = max(1, round(image.width * scale))
+        height = max(1, round(image.height * scale))
+
+        image = image.resize(
+            (width, height),
+            Image.Resampling.BILINEAR,
+        )
+
+        canvas = Image.new(
+            "RGB",
+            (image_size, image_size),
+            (114, 114, 114),
+        )
+
+        canvas.paste(
+            image,
+            (
+                (image_size - width) // 2,
+                (image_size - height) // 2,
+            ),
+        )
+
+        pixels = np.asarray(canvas, dtype=np.float32) / 255.0
+
+        # Convert HWC RGB to NCHW, matching the ONNX input.
+        return np.ascontiguousarray(
+            pixels.transpose(2, 0, 1)[None]
+        )
+
+def run_inference(blob):
+    net.setInput(blob)
+    return net.forward(output_names)
+
+print("Running warmup; OpenCL kernel compilation may take time...")
+warmup_start = time.perf_counter()
+
+warmup_outputs = run_inference(prepare_image(images[0]))
+
+warmup_seconds = time.perf_counter() - warmup_start
+
+print(f"Warmup time: {warmup_seconds:.2f} seconds")
+print("Output shapes:", [output.shape for output in warmup_outputs])
+
+if not all(
+    output.size > 0 and np.isfinite(output).all()
+    for output in warmup_outputs
+):
+    raise RuntimeError("Warmup produced empty or non-finite output")
+
+preprocess_times = []
+inference_times = []
+
+for index, image_path in enumerate(images, start=1):
+    start = time.perf_counter()
+    blob = prepare_image(image_path)
+    prepared = time.perf_counter()
+
+    outputs = run_inference(blob)
+    finished = time.perf_counter()
+
+    if not all(
+        output.size > 0 and np.isfinite(output).all()
+        for output in outputs
+    ):
+        raise RuntimeError(f"Invalid output for {image_path}")
+
+    preprocess_ms = (prepared - start) * 1000
+    inference_ms = (finished - prepared) * 1000
+
+    preprocess_times.append(preprocess_ms)
+    inference_times.append(inference_ms)
+
+    print(
+        f"{index}/{len(images)} {image_path.name}: "
+        f"preprocess {preprocess_ms:.1f} ms, "
+        f"inference {inference_ms:.1f} ms",
+        flush=True,
+    )
+
+mean_inference = statistics.mean(inference_times)
+
+summary = {
+    "runtime": "OpenCV DNN",
+    "requested_target": "OpenCL GPU",
+    "opencl_device": device_name,
+    "images": len(images),
+    "seed": 42,
+    "image_size": image_size,
+    "load_seconds": load_seconds,
+    "warmup_seconds": warmup_seconds,
+    "mean_preprocess_ms": statistics.mean(preprocess_times),
+    "mean_inference_ms": mean_inference,
+    "median_inference_ms": statistics.median(inference_times),
+    "inference_fps": 1000 / mean_inference,
+    "note": (
+        "Raw model output only. No detection postprocessing or accuracy "
+        "metrics. OpenCL target selection does not rule out CPU fallback."
+    ),
+}
+
+output_path = output_dir / "summary.json"
+output_path.write_text(json.dumps(summary, indent=2) + "\\n")
+
+print()
+print(json.dumps(summary, indent=2))
+PY
                 '''
             }
         }
@@ -84,7 +315,10 @@ pipeline {
 
     post {
         always {
-            archiveArtifacts artifacts: "uno-q-benchmark/build-${env.BUILD_NUMBER}/gpu-benchmark.log,uno-q-benchmark/build-${env.BUILD_NUMBER}/results/**", allowEmptyArchive: true
+            archiveArtifacts(
+                artifacts: "uno-q-opencl/build-${env.BUILD_NUMBER}/results/**",
+                allowEmptyArchive: true
+            )
         }
     }
 }
