@@ -11,7 +11,7 @@ import yaml
 
 DATASETS = Path(__file__).resolve().parent / "datasets"
 NAMES = ["person", "cat", "dog", "dalek", "lightsaber"]
-MIN_OBJECT_AREA = 0.25 
+MIN_OBJECT_AREA = 0.25
 IMAGES_PER_CLASS = 500
 DOWNLOAD_WORKERS = 16
 
@@ -23,6 +23,7 @@ def download(url, destination):
         temporary = destination.with_suffix(destination.suffix + ".part")
         urlretrieve(url, temporary)
         temporary.replace(destination)
+
 
 def download_img(filename, image_output):
     """Download one image"""
@@ -106,6 +107,9 @@ def prepare_coco():
 
     for class_id in range(3):
         print(f"{NAMES[class_id]} candidates: {len(candidates[class_id])}")
+        selected.update(
+            rng.sample(sorted(candidates[class_id]), IMAGES_PER_CLASS)
+        )
 
     # Split the combined selection once so a multi-class image cannot leak
     # into two sets. Sorting before shuffling makes the result repeatable.
