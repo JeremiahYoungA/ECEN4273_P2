@@ -1,0 +1,184 @@
+pipeline {
+    // Change this to the Jenkins label assigned to your Uno Q.
+    agent { label 'uno-q' }
+
+    options {
+        skipDefaultCheckout()
+    }
+
+    parameters {
+        string(
+            name: 'GIT_BRANCH',
+            defaultValue: 'main',
+            description: 'Branch containing the project code',
+            trim: true
+        )
+
+        string(
+            name: 'MODEL_JOB',
+            defaultValue: 'model-training-test',
+            description: 'Jenkins job supplying the trained model and dataset',
+            trim: true
+        )
+
+        string(
+            name: 'MODEL_BUILD',
+            defaultValue: 'lastSuccessfulBuild',
+            description: 'Training build number, or lastSuccessfulBuild',
+            trim: true
+        )
+
+        string(
+            name: 'IMGSZ',
+            defaultValue: '320',
+            description: 'Model input size',
+            trim: true
+        )
+
+        string(
+            name: 'VULKAN_DEVICE',
+            defaultValue: 'vulkan:0',
+            description: 'Ultralytics Vulkan device; verify that device 0 is Adreno',
+            trim: true
+        )
+    }
+
+    environment {
+        // Adjust if your Uno Q environment is stored elsewhere.
+        VENV = "${WORKSPACE}/.venv"
+    }
+
+    stages {
+        stage('Checkout selected branch') {
+            steps {
+                git(
+                    branch: params.GIT_BRANCH,
+                    url: 'https://github.com/JeremiahYoungA/ECEN4273_P2.git'
+                )
+
+                sh 'git log -1 --format="%h %s"'
+            }
+        }
+
+        stage('Check Uno Q environment') {
+            steps {
+                sh '''
+                    set -eu
+
+                    echo "Agent:"
+                    whoami
+                    hostname
+                    uname -m
+
+                    echo "Python:"
+                    python3 --version
+
+                    echo "Graphics devices:"
+                    ls -l /dev/dri/ || true
+
+                    if command -v vulkaninfo >/dev/null 2>&1; then
+                        echo "Vulkan devices:"
+                        vulkaninfo --summary
+                    else
+                        echo "vulkaninfo is not installed."
+                        echo "Inspect the NCNN device list in the benchmark output."
+                    fi
+
+                    test -x "$VENV/bin/python" || {
+                        echo "Missing Python environment: $VENV"
+                        echo "Install Ultralytics and Vulkan-enabled NCNN there first."
+                        exit 1
+                    }
+
+                    "$VENV/bin/python" -c \
+                        'import ultralytics, ncnn; print("Ultralytics:", ultralytics.__version__); print("NCNN import successful")'
+                '''
+            }
+        }
+
+        stage('Download trained model and dataset') {
+            steps {
+                script {
+                    // Isolate each build so old artifacts cannot be reused accidentally.
+                    env.BENCH_DIR = "uno-q-benchmark/build-${env.BUILD_NUMBER}"
+                }
+
+                copyArtifacts(
+                    projectName: params.MODEL_JOB,
+                    selector: specific(params.MODEL_BUILD),
+                    filter: '**/weights/best.pt,**/coco-evaluation.tar.gz',
+                    target: "${env.BENCH_DIR}/artifacts",
+                    flatten: true,
+                    fingerprintArtifacts: true,
+                    resultVariableSuffix: 'TRAINING'
+                )
+
+                sh '''
+                    set -eu
+
+                    test -s "$BENCH_DIR/artifacts/best.pt"
+                    test -s "$BENCH_DIR/artifacts/coco-evaluation.tar.gz"
+
+                    mkdir -p "$BENCH_DIR/datasets"
+
+                    tar -xzf "$BENCH_DIR/artifacts/coco-evaluation.tar.gz" \
+                        -C "$BENCH_DIR/datasets"
+
+                    test -d "$BENCH_DIR/datasets/coco/images/val"
+
+                    echo "Validation images:"
+                    find "$BENCH_DIR/datasets/coco/images/val" \
+                        -type f | wc -l
+                '''
+            }
+        }
+
+        stage('Export trained model to NCNN') {
+            steps {
+                sh '''
+                    set -eu
+
+                    "$VENV/bin/yolo" export \
+                        model="$BENCH_DIR/artifacts/best.pt" \
+                        format=ncnn \
+                        imgsz="$IMGSZ" \
+                        batch=1 \
+                        device=cpu
+
+                    test -d "$BENCH_DIR/artifacts/best_ncnn_model"
+
+                    echo "NCNN model files:"
+                    ls -lh "$BENCH_DIR/artifacts/best_ncnn_model"
+                '''
+            }
+        }
+
+        stage('Benchmark Uno Q GPU') {
+            steps {
+                sh '''#!/usr/bin/env bash
+                    set -euo pipefail
+
+                    echo "Running model on $VULKAN_DEVICE"
+                    echo "Inspect NCNN output to confirm this is the Adreno GPU."
+
+                    PYTHONUNBUFFERED=1 "$VENV/bin/yolo" predict \
+                        model="$BENCH_DIR/artifacts/best_ncnn_model" \
+                        source="$BENCH_DIR/datasets/coco/images/val" \
+                        imgsz="$IMGSZ" \
+                        device="$VULKAN_DEVICE" \
+                        save=False \
+                        2>&1 | tee "$BENCH_DIR/gpu-benchmark.log"
+                '''
+            }
+        }
+    }
+
+    post {
+        always {
+            archiveArtifacts(
+                artifacts: "uno-q-benchmark/build-${env.BUILD_NUMBER}/gpu-benchmark.log",
+                allowEmptyArchive: true
+            )
+        }
+    }
+}
