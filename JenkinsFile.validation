@@ -105,6 +105,7 @@ pipeline {
                         batch=1 \
                         device=cpu \
                         dynamic=False \
+                        quantize=8 \
                         simplify=True
 
                     test -s models/best.onnx
