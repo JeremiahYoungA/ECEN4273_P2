@@ -9,7 +9,7 @@ model = YOLO("architectures/yolo26n-embedded.yaml").load("yolo26n.pt")
 
 model.train(
     data="datasets/project.yaml",
-    epochs=75,
+    epochs=1,
     imgsz=320,
     batch=16,
     device=0,

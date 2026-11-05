@@ -143,7 +143,7 @@ pipeline {
                     test -n "$(find "$model_dir/best_ncnn_model" -name '*.param' -type f -print -quit)"
                     test -n "$(find "$model_dir/best_ncnn_model" -name '*.bin' -type f -print -quit)"
 
-                    tar -czf "$model_dir/best_ncnn_model.tar.gz" \
+                    tar -chzf "$model_dir/best_ncnn_model.tar.gz" \
                         -C "$model_dir" best_ncnn_model
                 '''
 
