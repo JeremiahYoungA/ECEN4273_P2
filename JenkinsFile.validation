@@ -63,7 +63,7 @@ pipeline {
             steps {
                 // Remove old weights so they cannot mask a failed download.
                 sh 'rm -f models/best.pt'
-                sh 'rm -rf models/best.ncnn'
+                sh 'rm -rf models/best_int8.ncnn'
                 sh 'rm -rf datasets/coco'
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
@@ -107,14 +107,14 @@ pipeline {
                         quantize=8 \
                         simplify=True
 
-                    test -s models/best.ncnn
+                    test -s models/best_int8.ncnn
                 '''
             }
 
             post {
                 success {
                     archiveArtifacts(
-                        artifacts: 'models/best.ncnn',
+                        artifacts: 'models/best_int8.ncnn',
                         fingerprint: true
                     )
                 }
@@ -125,7 +125,7 @@ pipeline {
             steps {
                 sh '''
                     .venv/bin/python -u validate.py \
-                        --model models/best.ncnn \
+                        --model models/best_int8.ncnn \
                         --split val \
                         --samples 100 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
