@@ -106,7 +106,7 @@ pipeline {
                     sh 'test -s "runs/ci/build-$BUILD_NUMBER/weights/best.pt"'
 
                     sh '''
-                        tar -czhf "runs/ci/build-$BUILD_NUMBER/coco-evaluation.tar.gz" \
+                        tar -czf "runs/ci/build-$BUILD_NUMBER/coco-evaluation.tar.gz" \
                             -C datasets coco
                     '''
 
@@ -115,6 +115,42 @@ pipeline {
                         fingerprint: true
                     )
                 }
+            }
+        }
+
+        stage('Export models for embedded devices') {
+            steps {
+                sh '''
+                    set -eu
+
+                    model_dir="runs/ci/build-$BUILD_NUMBER/weights"
+                    test -s "$model_dir/best.pt"
+
+                    "$VENV/bin/python" -m pip install --no-cache-dir \
+                        onnx onnxslim pnnx
+
+                    "$VENV/bin/yolo" export \
+                        model="$model_dir/best.pt" \
+                        format=onnx imgsz=320 batch=1 \
+                        device=cpu dynamic=False simplify=True
+
+                    "$VENV/bin/yolo" export \
+                        model="$model_dir/best.pt" \
+                        format=ncnn imgsz=320 batch=1 device=cpu
+
+                    test -s "$model_dir/best.onnx"
+                    test -d "$model_dir/best_ncnn_model"
+                    test -n "$(find "$model_dir/best_ncnn_model" -name '*.param' -type f -print -quit)"
+                    test -n "$(find "$model_dir/best_ncnn_model" -name '*.bin' -type f -print -quit)"
+
+                    tar -czf "$model_dir/best_ncnn_model.tar.gz" \
+                        -C "$model_dir" best_ncnn_model
+                '''
+
+                archiveArtifacts(
+                    artifacts: "runs/ci/build-${env.BUILD_NUMBER}/weights/best.onnx,runs/ci/build-${env.BUILD_NUMBER}/weights/best_ncnn_model.tar.gz",
+                    fingerprint: true
+                )
             }
         }
     }
