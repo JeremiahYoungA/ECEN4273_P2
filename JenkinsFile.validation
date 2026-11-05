@@ -63,7 +63,7 @@ pipeline {
             steps {
                 // Remove old weights so they cannot mask a failed download.
                 sh 'rm -f models/best.pt'
-                sh 'rm -rf models/best_int8.onnx'
+                sh 'rm -rf models/best.ncnn'
                 sh 'rm -rf datasets/coco'
                 sh 'rm -f models/coco-evaluation.tar.gz'
 
@@ -92,30 +92,29 @@ pipeline {
             }
         }
 
-        stage('Export model to ONNX') {
+        stage('Export model to NCNN') {
             steps {
                 sh '''
-                    .venv/bin/python -m pip install --no-cache-dir \
-                        onnx onnxruntime onnxslim
+                    .venv/bin/python -m pip install --no-cache-dir ncnn
 
                     .venv/bin/yolo export \
                         model=models/best.pt \
-                        format=onnx \
-                        imgsz=320 \
+                        format=ncnn \
+                        imgsz=640 \
                         batch=1 \
                         device=cpu \
                         dynamic=False \
-                        quantize=8 \
+                        quantize=16 \
                         simplify=True
 
-                    test -s models/best_int8.onnx
+                    test -s models/best.ncnn
                 '''
             }
 
             post {
                 success {
                     archiveArtifacts(
-                        artifacts: 'models/best_int8.onnx',
+                        artifacts: 'models/best.ncnn',
                         fingerprint: true
                     )
                 }
@@ -126,7 +125,7 @@ pipeline {
             steps {
                 sh '''
                     .venv/bin/python -u validate.py \
-                        --model models/best_int8.onnx \
+                        --model models/best.ncnn \
                         --split val \
                         --samples 100 \
                         --output "$WORKSPACE/evaluation/build-$BUILD_NUMBER"
