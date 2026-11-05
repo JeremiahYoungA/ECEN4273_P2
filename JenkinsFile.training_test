@@ -106,7 +106,7 @@ pipeline {
                     sh 'test -s "runs/ci/build-$BUILD_NUMBER/weights/best.pt"'
 
                     sh '''
-                        tar -czf "runs/ci/build-$BUILD_NUMBER/coco-evaluation.tar.gz" \
+                        tar -czhf "runs/ci/build-$BUILD_NUMBER/coco-evaluation.tar.gz" \
                             -C datasets coco
                     '''
 
