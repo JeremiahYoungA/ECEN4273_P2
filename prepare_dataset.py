@@ -11,7 +11,7 @@ import yaml
 
 DATASETS = Path(__file__).resolve().parent / "datasets"
 NAMES = ["person", "cat", "dog", "dalek", "lightsaber"]
-MIN_BOX_AREA_FRACTION = 0.25
+MIN_OBJECT_AREA = 0.25 
 IMAGES_PER_CLASS = 500
 DOWNLOAD_WORKERS = 16
 
@@ -59,14 +59,11 @@ def prepare_coco():
             if annotation.get("iscrowd", 0):
                 crowd_images.add(annotation["image_id"])
 
-    # Look up the dimensions of each COCO image.
     images = {image["id"]: image for image in annotations["images"]}
-
-    # Only select images with a target object's bounding box covering
-    # at least 25% of the image area.
     candidates = defaultdict(set)
 
     for image_id, image_boxes in boxes.items():
+        # Keep the existing exclusion for target crowd annotations.
         if image_id in crowd_images:
             continue
 
@@ -75,29 +72,40 @@ def prepare_coco():
         image_height = image["height"]
         image_area = image_width * image_height
 
+        classes_in_image = set()
+        reject_image = False
+
         for box in image_boxes:
             x, y, w, h = box["bbox"]
 
-            # Clip the box to the image, matching label generation.
+            # Clip the bounding box to the image boundaries.
             left = max(0, x)
             top = max(0, y)
             right = min(image_width, x + w)
             bottom = min(image_height, y + h)
 
+            # Reject images with invalid target boxes too.
             if right <= left or bottom <= top:
-                continue
+                reject_image = True
+                break
 
             box_area = (right - left) * (bottom - top)
-            area_fraction = box_area / image_area
 
-            if area_fraction >= MIN_BOX_AREA_FRACTION:
-                class_id = class_map[box["category_id"]]
+            if box_area < MIN_OBJECT_AREA * image_area:
+                reject_image = True
+                break
+
+            classes_in_image.add(class_map[box["category_id"]])
+
+        if not reject_image:
+            for class_id in classes_in_image:
                 candidates[class_id].add(image_id)
 
     rng = random.Random(76)
     selected = set()
+
     for class_id in range(3):
-        selected.update(rng.sample(sorted(candidates[class_id]), IMAGES_PER_CLASS))
+        print(f"{NAMES[class_id]} candidates: {len(candidates[class_id])}")
 
     # Split the combined selection once so a multi-class image cannot leak
     # into two sets. Sorting before shuffling makes the result repeatable.
